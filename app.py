@@ -10,7 +10,7 @@ CORS(app)
 # ===========================================
 # 🔥 CONFIG OPENAI — CHAVE DIRETO NO CÓDIGO
 # ===========================================
-OPENAI_KEY = "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"  # <<< COLOQUE AQUI A SUA KEY
+OPENAI_KEY = "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"  # <<< COLOQUE AQUI A SUA KEY
 
 client = OpenAI(api_key=OPENAI_KEY)
 
