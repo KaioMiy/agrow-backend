@@ -7,19 +7,17 @@ import uuid
 app = Flask(__name__)
 CORS(app)
 
-# -----------------------------
-# CONFIG OPENAI – NOVA API 2025
-# -----------------------------
-OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-if not OPENAI_KEY:
-    raise RuntimeError("Defina a variável de ambiente OPENAI_API_KEY no Render.")
+# ===========================================
+# 🔥 CONFIG OPENAI — CHAVE DIRETO NO CÓDIGO
+# ===========================================
+OPENAI_KEY = "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"  # <<< COLOQUE AQUI A SUA KEY
 
 client = OpenAI(api_key=OPENAI_KEY)
 
 
 @app.route("/")
 def home():
-    return "API Assistente Rural IA rodando com sucesso!"
+    return "API Assistente Rural IA rodando corretamente!"
 
 
 @app.route("/processar-audio", methods=["POST"])
@@ -32,9 +30,9 @@ def processar_audio():
     audio_file.save(temp_path)
 
     try:
-        # -----------------------------
-        # 1) TRANSCRIÇÃO WHISPER (NOVA API)
-        # -----------------------------
+        # ------------------------------------
+        # 1️⃣ TRANSCRIÇÃO (Whisper novo)
+        # ------------------------------------
         transcription = client.audio.transcriptions.create(
             model="gpt-4o-mini-transcribe",
             file=open(temp_path, "rb")
@@ -43,15 +41,15 @@ def processar_audio():
         texto_usuario = transcription.text
         print("Usuário disse:", texto_usuario)
 
-        # -----------------------------
-        # 2) RESPOSTA GPT (NOVA API)
-        # -----------------------------
+        # ------------------------------------
+        # 2️⃣ RESPOSTA GPT
+        # ------------------------------------
         resposta = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um especialista em agricultura e cultivo. Responda de forma clara e objetiva."
+                    "content": "Você é um especialista em agricultura. Responda de forma clara e direta."
                 },
                 {
                     "role": "user",
@@ -61,11 +59,11 @@ def processar_audio():
         )
 
         texto_resposta = resposta.choices[0].message["content"]
-        print("Resposta gerada:", texto_resposta)
+        print("Resposta:", texto_resposta)
 
-        # -----------------------------
-        # 3) TEXTO → ÁUDIO (TTS NOVO)
-        # -----------------------------
+        # ------------------------------------
+        # 3️⃣ TTS — Texto para Áudio
+        # ------------------------------------
         speech = client.audio.speech.create(
             model="gpt-4o-mini-tts",
             voice="alloy",
@@ -77,9 +75,9 @@ def processar_audio():
         with open(output_path, "wb") as f:
             f.write(speech.read())
 
-        # -----------------------------
-        # 4) ENVIAR ÁUDIO
-        # -----------------------------
+        # ------------------------------------
+        # 4️⃣ Enviar para o frontend
+        # ------------------------------------
         return send_file(output_path, mimetype="audio/mp3")
 
     except Exception as e:
