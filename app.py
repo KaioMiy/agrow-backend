@@ -1,57 +1,57 @@
 import os
-import openai
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
+from openai import OpenAI
+import uuid
 
 app = Flask(__name__)
-# CORS liberado para qualquer origem (Firebase, etc.)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)
 
-# --- CONFIGURAÇÃO OPENAI ---
-# Leia SEMPRE da variável de ambiente
-openai.api_key = os.environ.get("OPENAI_API_KEY")
-if not openai.api_key:
-    raise RuntimeError("Defina a variável de ambiente OPENAI_API_KEY")
+# -----------------------------
+# CONFIG OPENAI – NOVA API 2025
+# -----------------------------
+OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_KEY:
+    raise RuntimeError("Defina a variável de ambiente OPENAI_API_KEY no Render.")
 
-client = openai.OpenAI(api_key=openai.api_key)
-# --------------------
+client = OpenAI(api_key=OPENAI_KEY)
 
-# Se você NÃO precisa servir index/script/folha pelo Flask,
-# pode até remover essas rotas. Elas não atrapalham, mas também não são usadas
-# quando o frontend está no Firebase.
 
-# --- ROTAS PARA TESTE LOCAL (opcional) ---
-@app.route('/')
+@app.route("/")
 def home():
-    return "API Assistente Rural IA - OK"
+    return "API Assistente Rural IA rodando com sucesso!"
 
-# --- ROTA DA API (O CÉREBRO) ---
-@app.route('/processar-audio', methods=['POST'])
+
+@app.route("/processar-audio", methods=["POST"])
 def processar_audio():
-    if 'audio' not in request.files:
-        return jsonify({"error": "Nenhum arquivo de áudio enviado"}), 400
+    if "audio" not in request.files:
+        return jsonify({"error": "Nenhum áudio enviado"}), 400
 
-    audio_file = request.files['audio']
-    temp_audio_path = "temp_recording.webm"
-    audio_file.save(temp_audio_path)
+    audio_file = request.files["audio"]
+    temp_path = f"temp_{uuid.uuid4()}.webm"
+    audio_file.save(temp_path)
 
     try:
-        # === 1. ÁUDIO -> TEXTO (Whisper) ===
-        with open(temp_audio_path, "rb") as f:
-            transcricao = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f
-            )
-        texto_usuario = transcricao.text
-        print(f"Texto do Usuário: {texto_usuario}")
+        # -----------------------------
+        # 1) TRANSCRIÇÃO WHISPER (NOVA API)
+        # -----------------------------
+        transcription = client.audio.transcriptions.create(
+            model="gpt-4o-mini-transcribe",
+            file=open(temp_path, "rb")
+        )
 
-        # === 2. TEXTO -> TEXTO (GPT) ===
-        resposta_chat = client.chat.completions.create(
-            model="gpt-4o",
+        texto_usuario = transcription.text
+        print("Usuário disse:", texto_usuario)
+
+        # -----------------------------
+        # 2) RESPOSTA GPT (NOVA API)
+        # -----------------------------
+        resposta = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um especialista em agricultura e cultivo. Responda de forma concisa e direta."
+                    "content": "Você é um especialista em agricultura e cultivo. Responda de forma clara e objetiva."
                 },
                 {
                     "role": "user",
@@ -59,40 +59,40 @@ def processar_audio():
                 }
             ]
         )
-        texto_resposta = resposta_chat.choices[0].message.content
-        print(f"Texto da Resposta: {texto_resposta}")
 
-        # === 3. TEXTO -> ÁUDIO (TTS) ===
-        resposta_audio_stream = client.audio.speech.create(
-            model="tts-1",
+        texto_resposta = resposta.choices[0].message["content"]
+        print("Resposta gerada:", texto_resposta)
+
+        # -----------------------------
+        # 3) TEXTO → ÁUDIO (TTS NOVO)
+        # -----------------------------
+        speech = client.audio.speech.create(
+            model="gpt-4o-mini-tts",
             voice="alloy",
-            input=texto_resposta
+            input=texto_resposta,
+            format="mp3"
         )
 
-        path_resposta_audio = "response_audio.mp3"
-        # dependendo da versão do SDK, pode ser write_to_file ou stream_to_file
-        try:
-            resposta_audio_stream.stream_to_file(path_resposta_audio)
-        except AttributeError:
-            # fallback para versões novas
-            with open(path_resposta_audio, "wb") as f:
-                f.write(resposta_audio_stream.read())
+        output_path = f"resposta_{uuid.uuid4()}.mp3"
+        with open(output_path, "wb") as f:
+            f.write(speech.read())
 
-        # === 4. ENVIAR ÁUDIO DE VOLTA ===
-        return send_file(path_resposta_audio, mimetype="audio/mp3")
+        # -----------------------------
+        # 4) ENVIAR ÁUDIO
+        # -----------------------------
+        return send_file(output_path, mimetype="audio/mp3")
 
     except Exception as e:
-        print(f"Erro: {e}")
+        print("ERRO:", e)
         return jsonify({"error": str(e)}), 500
+
     finally:
-        if os.path.exists(temp_audio_path):
-            os.remove(temp_audio_path)
-        if os.path.exists("response_audio.mp3"):
-            # Se quiser, pode apagar depois de enviar
+        try:
+            os.remove(temp_path)
+        except:
             pass
 
 
-if __name__ == '__main__':
-    # Render define a porta na variável PORT
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
